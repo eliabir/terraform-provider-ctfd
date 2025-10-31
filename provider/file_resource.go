@@ -2,7 +2,8 @@ package provider
 
 import (
 	"context"
-	"encoding/base64"
+	"os"
+
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -40,7 +41,7 @@ type fileResourceModel struct {
 	Name        types.String `tfsdk:"name"`
 	Location    types.String `tfsdk:"location"`
 	SHA1Sum     types.String `tfsdk:"sha1sum"`
-	ContentB64  types.String `tfsdk:"contentb64"`
+	FilePath    types.String `tfsdk:"file_path"`
 }
 
 func (r *fileResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -61,6 +62,13 @@ func (r *fileResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"challenge_id": schema.StringAttribute{
 				MarkdownDescription: "Challenge of the file.",
 				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"file_path": schema.StringAttribute{
+				MarkdownDescription: "Absolute path to the file",
+				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -86,15 +94,6 @@ func (r *fileResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
-				},
-			},
-			"contentb64": schema.StringAttribute{
-				MarkdownDescription: "Base 64 content of the file, perfectly fit the use-cases of complex binaries. You could provide it from the file-system using `filebase64(\"${path.module}/...\")`.",
-				Optional:            true,
-				Computed:            true,
-				Sensitive:           true, // define as sensitive, because content could be + avoid printing it
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
 				},
 			},
 		},
@@ -127,14 +126,15 @@ func (r *fileResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	// Create file
-	content, err := base64.StdEncoding.DecodeString(data.ContentB64.ValueString())
+	content, err := os.ReadFile(data.FilePath.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Content Error",
-			fmt.Sprintf("base64 content is invalid: %s", err),
+			fmt.Sprintf("failed to read file: %s", err),
 		)
 		return
 	}
+
 	params := &api.PostFilesParams{
 		Files: []*api.InputFile{
 			{
@@ -192,19 +192,6 @@ func (r *fileResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	if resp.Diagnostics.HasError() {
 		return
 	}
-
-	content, err := r.client.GetFileContent(&api.File{
-		Location: res.Location,
-	}, api.WithContext(ctx), api.WithTransport(otelhttp.NewTransport(nil)))
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"CTFd Error",
-			fmt.Sprintf("Unable to read file at location %s, got error: %s", res.Location, err),
-		)
-		return
-	}
-
-	data.ContentB64 = types.StringValue(base64.StdEncoding.EncodeToString(content))
 
 	if resp.Diagnostics.HasError() {
 		return

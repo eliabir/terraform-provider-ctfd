@@ -21,26 +21,30 @@ resource "ctfd_challenge_standard" "example" {
 }
 
 resource "ctfd_file" "pouet" {
-	challenge_id = ctfd_challenge_standard.example.id
-	name         = "pouet.txt"
-	contentb64   = "UG91ZXQgaXMgYSBjbG93biBjYXQK"
+	challenge_id      = ctfd_challenge_standard.example.id
+	name              = "pouet.txt"
+	contentb64        = "UG91ZXQgaXMgYSBjbG93biBjYXQK"
+	contentb64_hash   = base64sha256(base64decode("UG91ZXQgaXMgYSBjbG93biBjYXQK"))
 }
 
 resource "ctfd_file" "pouet_2" {
-	name       = "pouet-2.txt"
-	contentb64 = "UG91ZXQgaXMgYSBjbG93biBjYXQsIGJ1dCBoYXMgbm90IGNoYWxsZW5nZQo="
+	name            = "pouet-2.txt"
+	contentb64      = "UG91ZXQgaXMgYSBjbG93biBjYXQsIGJ1dCBoYXMgbm90IGNoYWxsZW5nZQo="
+	contentb64_hash = base64sha256(base64decode("UG91ZXQgaXMgYSBjbG93biBjYXQsIGJ1dCBoYXMgbm90IGNoYWxsZW5nZQo="))
 }
 `,
 			},
 			// ImportState testing
 			{
-				ResourceName:      "ctfd_file.pouet",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "ctfd_file.pouet",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"contentb64_hash"}, // contentb64_hash cant be reconstructed when importing resource
 			}, {
-				ResourceName:      "ctfd_file.pouet_2",
-				ImportState:       true,
-				ImportStateVerify: true,
+				ResourceName:            "ctfd_file.pouet_2",
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"contentb64_hash"},
 			},
 			// Update and Read testing
 			{
@@ -53,14 +57,16 @@ resource "ctfd_challenge_standard" "example" {
 }
 
 resource "ctfd_file" "pouet" {
-	challenge_id = ctfd_challenge_standard.example.id
-	name         = "pouet.txt"
-	contentb64   = "UG91ZXQgdGhlIDJuZCBpcyB0aGUgY2xvd25pZXN0IGNhdCBldmVyCg=="
+	challenge_id    = ctfd_challenge_standard.example.id
+	name            = "pouet.txt"
+	contentb64      = "UG91ZXQgdGhlIDJuZCBpcyB0aGUgY2xvd25pZXN0IGNhdCBldmVyCg=="
+	contentb64_hash = base64sha256(base64decode("UG91ZXQgdGhlIDJuZCBpcyB0aGUgY2xvd25pZXN0IGNhdCBldmVyCg=="))
 }
 
 resource "ctfd_file" "pouet_2" {
-	name       = "pouet-second.txt"
-	contentb64 = "UG91ZXQgaXMgYSBjbG93biBjYXQsIGJ1dCBoYXMgbm90IGNoYWxsZW5nZQo="
+	name            = "pouet-second.txt"
+	contentb64      = "UG91ZXQgaXMgYSBjbG93biBjYXQsIGJ1dCBoYXMgbm90IGNoYWxsZW5nZQo="
+	contentb64_hash = base64sha256(base64decode("UG91ZXQgaXMgYSBjbG93biBjYXQsIGJ1dCBoYXMgbm90IGNoYWxsZW5nZQo="))
 }
 `,
 			},

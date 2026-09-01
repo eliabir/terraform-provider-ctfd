@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"path/filepath"
@@ -20,9 +21,10 @@ import (
 )
 
 var (
-	_ resource.Resource                = (*fileResource)(nil)
-	_ resource.ResourceWithConfigure   = (*fileResource)(nil)
-	_ resource.ResourceWithImportState = (*fileResource)(nil)
+	_ resource.Resource                 = (*fileResource)(nil)
+	_ resource.ResourceWithConfigure    = (*fileResource)(nil)
+	_ resource.ResourceWithImportState  = (*fileResource)(nil)
+	_ resource.ResourceWithUpgradeState = (*fileResource)(nil)
 )
 
 func NewFileResource() resource.Resource {
@@ -34,12 +36,13 @@ type fileResource struct {
 }
 
 type fileResourceModel struct {
-	ID          types.String `tfsdk:"id"`
-	ChallengeID types.String `tfsdk:"challenge_id"`
-	Name        types.String `tfsdk:"name"`
-	Location    types.String `tfsdk:"location"`
-	SHA1Sum     types.String `tfsdk:"sha1sum"`
-	ContentB64  types.String `tfsdk:"contentb64"`
+	ID             types.String `tfsdk:"id"`
+	ChallengeID    types.String `tfsdk:"challenge_id"`
+	Name           types.String `tfsdk:"name"`
+	Location       types.String `tfsdk:"location"`
+	SHA1Sum        types.String `tfsdk:"sha1sum"`
+	ContentB64     types.String `tfsdk:"contentb64"`
+	ContentB64Hash types.String `tfsdk:"contentb64_hash"`
 }
 
 func (r *fileResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -48,6 +51,7 @@ func (r *fileResource) Metadata(ctx context.Context, req resource.MetadataReques
 
 func (r *fileResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		Version:             1,
 		MarkdownDescription: "A CTFd file for a challenge.",
 		Attributes: map[string]schema.Attribute{
 			"id": schema.StringAttribute{
@@ -88,13 +92,68 @@ func (r *fileResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				},
 			},
 			"contentb64": schema.StringAttribute{
-				MarkdownDescription: "Base 64 content of the file, perfectly fit the use-cases of complex binaries. You could provide it from the file-system using `filebase64(\"${path.module}/...\")`.",
+				MarkdownDescription: "Base64 content of the file. Write-only: it is sent to CTFd but never stored in Terraform/OpenTofu state. Provide it with `filebase64(\"${path.module}/...\")`.",
 				Optional:            true,
-				Computed:            true,
-				Sensitive:           true, // define as sensitive, because content could be + avoid printing it
+				WriteOnly:           true,
+			},
+			"contentb64_hash": schema.StringAttribute{
+				MarkdownDescription: "Hash of the file content, used to detect changes since the content itself is not stored in state. Set it to `filebase64sha256(\"${path.module}/...\")`.",
+				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
+			},
+		},
+	}
+}
+
+func (r *fileResource) UpgradeState(ctx context.Context) map[int64]resource.StateUpgrader {
+	return map[int64]resource.StateUpgrader{
+		0: {
+			PriorSchema: &schema.Schema{
+				Attributes: map[string]schema.Attribute{
+					"id":           schema.StringAttribute{},
+					"challenge_id": schema.StringAttribute{},
+					"name":         schema.StringAttribute{},
+					"location":     schema.StringAttribute{},
+					"sha1sum":      schema.StringAttribute{},
+					"contentb64":   schema.StringAttribute{},
+				},
+			},
+			StateUpgrader: func(ctx context.Context, req resource.UpgradeStateRequest, resp *resource.UpgradeStateResponse) {
+				type priorModel struct {
+					ID          types.String `tfsdk:"id"`
+					ChallengeID types.String `tfsdk:"challenge_id"`
+					Name        types.String `tfsdk:"name"`
+					Location    types.String `tfsdk:"location"`
+					SHA1Sum     types.String `tfsdk:"sha1sum"`
+					ContentB64  types.String `tfsdk:"contentb64"`
+				}
+
+				var prior priorModel
+				resp.Diagnostics.Append(req.State.Get(ctx, &prior)...)
+				if resp.Diagnostics.HasError() {
+					return
+				}
+
+				hash := types.StringNull()
+				if !prior.ContentB64.IsNull() && prior.ContentB64.ValueString() != "" {
+					if raw, err := base64.StdEncoding.DecodeString(prior.ContentB64.ValueString()); err == nil {
+						sum := sha256.Sum256(raw)
+						hash = types.StringValue(base64.StdEncoding.EncodeToString(sum[:]))
+					}
+				}
+
+				upgraded := fileResourceModel{
+					ID:             prior.ID,
+					ChallengeID:    prior.ChallengeID,
+					Name:           prior.Name,
+					Location:       prior.Location,
+					SHA1Sum:        prior.SHA1Sum,
+					ContentB64:     types.StringNull(),
+					ContentB64Hash: hash,
+				}
+				resp.Diagnostics.Append(resp.State.Set(ctx, &upgraded)...)
 			},
 		},
 	}
@@ -128,8 +187,14 @@ func (r *fileResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
+	var contentB64 types.String
+	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("contentb64"), &contentB64)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Create file
-	content, err := base64.StdEncoding.DecodeString(data.ContentB64.ValueString())
+	content, err := base64.StdEncoding.DecodeString(contentB64.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Content Error",
@@ -194,26 +259,7 @@ func (r *fileResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	data.Location = types.StringValue(res.Location)
 	data.SHA1Sum = types.StringValue(res.SHA1sum)
 	data.ChallengeID = lookForChallengeId(ctx, r.fm.Client, res.ID, resp.Diagnostics, WithTracerProvider(r.fm.Tp))
-	if resp.Diagnostics.HasError() {
-		return
-	}
 
-	content, err := r.fm.Client.GetFileContent(ctx, &api.File{
-		Location: res.Location,
-	}, WithTracerProvider(r.fm.Tp))
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"CTFd Error",
-			fmt.Sprintf("Unable to read file at location %s, got error: %s", res.Location, err),
-		)
-		return
-	}
-
-	data.ContentB64 = types.StringValue(base64.StdEncoding.EncodeToString(content))
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 

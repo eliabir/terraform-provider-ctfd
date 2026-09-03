@@ -12,6 +12,10 @@
     <a href="https://securityscorecards.dev/viewer/?uri=github.com/ctfer-io/terraform-provider-ctfd"><img src="https://img.shields.io/ossf-scorecard/github.com/ctfer-io/terraform-provider-ctfd?label=openssf%20scorecard&style=for-the-badge" alt="OpenSSF Scoreboard"></a>
 </div>
 
+> [!NOTE]
+> This is a modified fork of
+> [ctfer-io/terraform-provider-ctfd](https://github.com/ctfer-io/terraform-provider-ctfd).
+
 ## Why creating this ?
 
 Terraform is used to manage resources that have lifecycles, configurations, to sum it up.

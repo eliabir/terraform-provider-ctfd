@@ -1,7 +1,7 @@
 package provider
 
 import (
-	"github.com/ctfer-io/terraform-provider-ctfd/v2/provider/utils"
+	"github.com/eliabir/terraform-provider-ctfd/v2/provider/utils"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 

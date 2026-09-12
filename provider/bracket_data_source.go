@@ -75,7 +75,7 @@ func (data *bracketDataSource) Configure(ctx context.Context, req datasource.Con
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected %T, got: %T. Please open an issue at https://github.com/ctfer-io/terraform-provider-ctfd", (*Framework)(nil), req.ProviderData),
+			fmt.Sprintf("Expected %T, got: %T. Please open an issue at https://github.com/eliabir/terraform-provider-ctfd", (*Framework)(nil), req.ProviderData),
 		)
 		return
 	}

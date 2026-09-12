@@ -5,7 +5,7 @@ import (
 	"log"
 	"testing"
 
-	"github.com/ctfer-io/terraform-provider-ctfd/v2/provider"
+	"github.com/eliabir/terraform-provider-ctfd/v2/provider"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 )

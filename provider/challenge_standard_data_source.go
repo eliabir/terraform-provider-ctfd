@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/ctfer-io/go-ctfd/api"
-	"github.com/ctfer-io/terraform-provider-ctfd/v2/provider/utils"
+	"github.com/eliabir/terraform-provider-ctfd/v2/provider/utils"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -124,7 +124,7 @@ func (data *challengeStandardDataSource) Configure(ctx context.Context, req data
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected %T, got: %T. Please open an issue at https://github.com/ctfer-io/terraform-provider-ctfd", (*Framework)(nil), req.ProviderData),
+			fmt.Sprintf("Expected %T, got: %T. Please open an issue at https://github.com/eliabir/terraform-provider-ctfd", (*Framework)(nil), req.ProviderData),
 		)
 		return
 	}

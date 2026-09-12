@@ -12,7 +12,7 @@ import (
 	"net/http"
 
 	"github.com/ctfer-io/go-ctfd/api"
-	"github.com/ctfer-io/terraform-provider-ctfd/v2/provider/utils"
+	"github.com/eliabir/terraform-provider-ctfd/v2/provider/utils"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 

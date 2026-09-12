@@ -6,8 +6,8 @@ import (
 	"strconv"
 
 	"github.com/ctfer-io/go-ctfd/api"
-	"github.com/ctfer-io/terraform-provider-ctfd/v2/provider/utils"
-	"github.com/ctfer-io/terraform-provider-ctfd/v2/provider/validators"
+	"github.com/eliabir/terraform-provider-ctfd/v2/provider/utils"
+	"github.com/eliabir/terraform-provider-ctfd/v2/provider/validators"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
@@ -109,7 +109,7 @@ func (r *flagResource) Configure(ctx context.Context, req resource.ConfigureRequ
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected %T, got: %T. Please open an issue at https://github.com/ctfer-io/terraform-provider-ctfd", (*Framework)(nil), req.ProviderData),
+			fmt.Sprintf("Expected %T, got: %T. Please open an issue at https://github.com/eliabir/terraform-provider-ctfd", (*Framework)(nil), req.ProviderData),
 		)
 		return
 	}

@@ -33,10 +33,10 @@ resource "ctfd_challenge_dynamic" "http" {
 }
 
 resource "ctfd_file" "http_file" {
-  challenge_id    = ctfd_challenge_dynamic.http.id
-  name            = "image.png"
-  contentb64      = filebase64(".../image.png")
-  contentb64_hash = filebase64sha256(".../image.png")
+  challenge_id = ctfd_challenge_dynamic.http.id
+  name         = "image.png"
+  content_path = "${path.module}/image.png"
+  content_hash = filesha256("${path.module}/image.png")
 }
 ```
 
@@ -45,15 +45,13 @@ resource "ctfd_file" "http_file" {
 
 ### Required
 
+- `content_path` (String) Local filesystem path to the file's content. Provide it with `"${path.module}/..."`.
 - `name` (String) Name of the file as displayed to end-users.
 
 ### Optional
 
-> **NOTE**: [Write-only arguments](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments) are supported in Terraform 1.11 and later.
-
 - `challenge_id` (String) Challenge of the file.
-- `contentb64` (String, [Write-only](https://developer.hashicorp.com/terraform/language/resources/ephemeral#write-only-arguments)) Base64 content of the file. Write-only: it is sent to CTFd but never stored in Terraform/OpenTofu state. Provide it with `filebase64("${path.module}/...")`.
-- `contentb64_hash` (String) Hash of the file content, used to detect changes since the content itself is not stored in state. Set it to `filebase64sha256("${path.module}/...")`.
+- `content_hash` (String) Hash of the file content, used to detect changes since the content itself is not stored in state. Set it to `filesha256("${path.module}/...")`.
 - `location` (String) Location where the file is stored on the CTFd instance, for download purposes.
 
 ### Read-Only

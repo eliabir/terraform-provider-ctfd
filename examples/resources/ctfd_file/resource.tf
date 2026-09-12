@@ -18,8 +18,8 @@ resource "ctfd_challenge_dynamic" "http" {
 }
 
 resource "ctfd_file" "http_file" {
-  challenge_id    = ctfd_challenge_dynamic.http.id
-  name            = "image.png"
-  contentb64      = filebase64(".../image.png")
-  contentb64_hash = filebase64sha256(".../image.png")
+  challenge_id = ctfd_challenge_dynamic.http.id
+  name         = "image.png"
+  content_path = "${path.module}/image.png"
+  content_hash = filesha256("${path.module}/image.png")
 }

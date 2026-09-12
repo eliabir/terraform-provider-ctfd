@@ -2,9 +2,8 @@ package provider
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 
@@ -36,13 +35,13 @@ type fileResource struct {
 }
 
 type fileResourceModel struct {
-	ID             types.String `tfsdk:"id"`
-	ChallengeID    types.String `tfsdk:"challenge_id"`
-	Name           types.String `tfsdk:"name"`
-	Location       types.String `tfsdk:"location"`
-	SHA1Sum        types.String `tfsdk:"sha1sum"`
-	ContentB64     types.String `tfsdk:"contentb64"`
-	ContentB64Hash types.String `tfsdk:"contentb64_hash"`
+	ID          types.String `tfsdk:"id"`
+	ChallengeID types.String `tfsdk:"challenge_id"`
+	Name        types.String `tfsdk:"name"`
+	Location    types.String `tfsdk:"location"`
+	SHA1Sum     types.String `tfsdk:"sha1sum"`
+	ContentPath types.String `tfsdk:"content_path"`
+	ContentHash types.String `tfsdk:"content_hash"`
 }
 
 func (r *fileResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -91,13 +90,15 @@ func (r *fileResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
-			"contentb64": schema.StringAttribute{
-				MarkdownDescription: "Base64 content of the file. Write-only: it is sent to CTFd but never stored in Terraform/OpenTofu state. Provide it with `filebase64(\"${path.module}/...\")`.",
-				Optional:            true,
-				WriteOnly:           true,
+			"content_path": schema.StringAttribute{
+				MarkdownDescription: "Local filesystem path to the file's content. Provide it with `\"${path.module}/...\"`.",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
 			},
-			"contentb64_hash": schema.StringAttribute{
-				MarkdownDescription: "Hash of the file content, used to detect changes since the content itself is not stored in state. Set it to `filebase64sha256(\"${path.module}/...\")`.",
+			"content_hash": schema.StringAttribute{
+				MarkdownDescription: "Hash of the file content, used to detect changes since the content itself is not stored in state. Set it to `filesha256(\"${path.module}/...\")`.",
 				Optional:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -136,22 +137,14 @@ func (r *fileResource) UpgradeState(ctx context.Context) map[int64]resource.Stat
 					return
 				}
 
-				hash := types.StringNull()
-				if !prior.ContentB64.IsNull() && prior.ContentB64.ValueString() != "" {
-					if raw, err := base64.StdEncoding.DecodeString(prior.ContentB64.ValueString()); err == nil {
-						sum := sha256.Sum256(raw)
-						hash = types.StringValue(base64.StdEncoding.EncodeToString(sum[:]))
-					}
-				}
-
 				upgraded := fileResourceModel{
-					ID:             prior.ID,
-					ChallengeID:    prior.ChallengeID,
-					Name:           prior.Name,
-					Location:       prior.Location,
-					SHA1Sum:        prior.SHA1Sum,
-					ContentB64:     types.StringNull(),
-					ContentB64Hash: hash,
+					ID:          prior.ID,
+					ChallengeID: prior.ChallengeID,
+					Name:        prior.Name,
+					Location:    prior.Location,
+					SHA1Sum:     prior.SHA1Sum,
+					ContentPath: types.StringNull(),
+					ContentHash: types.StringNull(),
 				}
 				resp.Diagnostics.Append(resp.State.Set(ctx, &upgraded)...)
 			},
@@ -187,18 +180,11 @@ func (r *fileResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	var contentB64 types.String
-	resp.Diagnostics.Append(req.Config.GetAttribute(ctx, path.Root("contentb64"), &contentB64)...)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	// Create file
-	content, err := base64.StdEncoding.DecodeString(contentB64.ValueString())
+	content, err := os.ReadFile(data.ContentPath.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Content Error",
-			fmt.Sprintf("base64 content is invalid: %s", err),
+			fmt.Sprintf("unable to read file at %q: %s", data.ContentPath.ValueString(), err),
 		)
 		return
 	}

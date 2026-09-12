@@ -69,11 +69,6 @@ jobs:
           CTFD_ADMIN_USERNAME: ctfer
           CTFD_ADMIN_PASSWORD: ctfer
 
-      - name: Upload coverage to Coveralls
-        uses: shogo82148/actions-goveralls@8781f5dd05b691c4dd042d5e859c11c73e0104fa # v1.11.1
-        with:
-          path-to-profile: cov.out
-
   go-lint:
     runs-on: ubuntu-latest
     steps:

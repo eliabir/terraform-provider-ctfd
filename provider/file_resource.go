@@ -24,6 +24,7 @@ var (
 	_ resource.ResourceWithConfigure    = (*fileResource)(nil)
 	_ resource.ResourceWithImportState  = (*fileResource)(nil)
 	_ resource.ResourceWithUpgradeState = (*fileResource)(nil)
+	_ resource.ResourceWithModifyPlan   = (*fileResource)(nil)
 )
 
 func NewFileResource() resource.Resource {
@@ -93,9 +94,6 @@ func (r *fileResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 			"content_path": schema.StringAttribute{
 				MarkdownDescription: "Local filesystem path to the file's content. Provide it with `\"${path.module}/...\"`.",
 				Required:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"content_hash": schema.StringAttribute{
 				MarkdownDescription: "Hash of the file content, used to detect changes since the content itself is not stored in state. Set it to `filesha256(\"${path.module}/...\")`.",
@@ -149,6 +147,32 @@ func (r *fileResource) UpgradeState(ctx context.Context) map[int64]resource.Stat
 				resp.Diagnostics.Append(resp.State.Set(ctx, &upgraded)...)
 			},
 		},
+	}
+}
+
+func (r *fileResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Only relevant when updating an existing resource (both state and plan set).
+	if req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var state, plan fileResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// content_path is only used to upload the bytes on create/replace. Its value
+	// varies by machine (e.g. CI vs local absolute paths), so ignore drift on it
+	// while the resource stays in place. If a RequiresReplace attribute changed
+	// (name/filename, challenge_id or content_hash), the resource is recreated and
+	// content_path must keep its configured value so the new content is uploaded.
+	if plan.Name.Equal(state.Name) &&
+		plan.ChallengeID.Equal(state.ChallengeID) &&
+		plan.ContentHash.Equal(state.ContentHash) {
+		plan.ContentPath = state.ContentPath
+		resp.Diagnostics.Append(resp.Plan.Set(ctx, &plan)...)
 	}
 }
 
@@ -241,7 +265,13 @@ func (r *fileResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		return
 	}
 
-	data.Name = types.StringValue(filepath.Base(res.Location))
+	// Preserve the user-provided name. CTFd sanitises the stored filename in the
+	// location (e.g. spaces become underscores), so deriving name from it would
+	// cause perpetual drift/replacement. Only fall back to the location basename
+	// on import, when state has no name yet.
+	if data.Name.IsNull() || data.Name.ValueString() == "" {
+		data.Name = types.StringValue(filepath.Base(res.Location))
+	}
 	data.Location = types.StringValue(res.Location)
 	data.SHA1Sum = types.StringValue(res.SHA1sum)
 	data.ChallengeID = lookForChallengeId(ctx, r.fm.Client, res.ID, resp.Diagnostics, WithTracerProvider(r.fm.Tp))
